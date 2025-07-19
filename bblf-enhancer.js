@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BBLF Enhancer
 // @namespace    http://tampermonkey.net/
-// @version      1.33
+// @version      1.34
 // @description  Monitor for issues on the live feed page, reloading or starting video when necessary. Can autoload quad cam, add hotkeys, show video scrubber, and remap fullscreen button to only show video.
 // @author       liquid8d
 // @match        https://www.paramountplus.com/shows/big_brother/live_feed/stream/
@@ -10,6 +10,9 @@
 
 // ==/UserScript==
 /*
+v 1.34 (2025)
+ - fix audio pan to split channels properly
+ - hookwebaudio only to primary video in case it interferes with thumbs (thumbs have no audio anyways)
 v 1.33 (2025)
  - added left/right audio balance hotkeys
 v 1.32 (2025)
@@ -121,9 +124,6 @@ v 1.2
         // start watching video
         setInterval(() => {
             checkVideo();
-            document.querySelectorAll('video').forEach((item) => {
-                addNode(item);
-            })
         }, monitorInterval);
     }
 
@@ -199,7 +199,8 @@ v 1.2
             } else {
                 var videoEl = document.querySelector('.aa-player-skin .player-wrapper video')
                 if (videoEl) {
-                    if (videoEl.paused) {
+					addNode(videoEl)
+					if (videoEl.paused) {
                         if (forcePlay) {
                             // attempt to unpause video
                             info('video is available and paused, trying to force play (manual user intervention may be required)')
@@ -259,6 +260,7 @@ v 1.2
             domNodes.push(node);
             log('DOM node added to list');
             hookUpWebAudio(node);
+			adjustChannel('none');
             log('hooked up web audio node');
         }
     }
@@ -266,30 +268,56 @@ v 1.2
     function hookUpWebAudio(node) {
         let audioNode = {};
         audioNode.source = audioCtx.createMediaElementSource(node);
+		audioNode.merger = audioCtx.createChannelMerger(2);
         audioNode.splitter = audioCtx.createChannelSplitter(2);
         audioNode.source.connect(audioNode.splitter, 0, 0);
         audioNode.gainLeft = audioCtx.createGain();
         audioNode.gainRight = audioCtx.createGain();
-        audioNode.splitter.connect(audioNode.gainLeft, 0);
-        audioNode.splitter.connect(audioNode.gainRight, 1);
-        audioNode.gainLeft.connect(audioCtx.destination, 0);
-        audioNode.gainRight.connect(audioCtx.destination, 0);
+		audioNode.source.connect(audioNode.splitter, 0, 0);
+		audioNode.merger.connect(audioCtx.destination, 0, 0);
+		audioNode.gainLeft.gain.value = 1;
+		audioNode.gainRight.gain.value = 1;
+        //audioNode.splitter.connect(audioNode.gainLeft, 0);
+        //audioNode.splitter.connect(audioNode.gainRight, 1);
+        //audioNode.gainLeft.connect(audioCtx.destination, 0);
+        //audioNode.gainRight.connect(audioCtx.destination, 0);
         audioNodes.push(audioNode);
     }
 
     function adjustChannel(dir) {
         audioNodes.forEach((audioNode) => {
             if (dir === 'none') {
-            audioNode.gainLeft.gain.value = 1;
-            audioNode.gainRight.gain.value = 1;
-            log('audio balance reset');
+				audioNode.gainLeft.disconnect();
+				audioNode.gainRight.disconnect();
+				audioNode.splitter.disconnect();
+				audioNode.gainLeft.connect(audioNode.merger, 0, 0);
+				audioNode.gainRight.connect(audioNode.merger, 0, 1);
+				audioNode.splitter.connect(audioNode.gainLeft, 0);
+				audioNode.splitter.connect(audioNode.gainRight, 1);
+				audioNode.gainLeft.gain.value = 1;
+				audioNode.gainRight.gain.value = 1;
+				log('audio balance reset');
             } else if (dir === 'left') {
-                audioNode.gainLeft.gain.value = 1;
-                audioNode.gainRight.gain.value = 0;
+				audioNode.gainLeft.disconnect();
+				audioNode.gainRight.disconnect();
+				audioNode.splitter.disconnect();
+				audioNode.gainLeft.connect(audioNode.merger, 0, 0);
+				audioNode.gainRight.connect(audioNode.merger, 0, 1);
+				audioNode.splitter.connect(audioNode.gainLeft, 0);
+				audioNode.splitter.connect(audioNode.gainRight, 0);
+				audioNode.gainLeft.gain.value = 1;
+				audioNode.gainRight.gain.value = 1;
                 log('audio balance left');
             } else {
-                audioNode.gainLeft.gain.value = 0;
-                audioNode.gainRight.gain.value = 1;
+				audioNode.gainLeft.disconnect();
+				audioNode.gainRight.disconnect();
+				audioNode.splitter.disconnect();
+				audioNode.gainLeft.connect(audioNode.merger, 0, 0);
+				audioNode.gainRight.connect(audioNode.merger, 0, 1);
+				audioNode.splitter.connect(audioNode.gainLeft, 1);
+				audioNode.splitter.connect(audioNode.gainRight, 1);
+				audioNode.gainLeft.gain.value = 1;
+				audioNode.gainRight.gain.value = 1;
                 log('audio balance right');
             }
         });
