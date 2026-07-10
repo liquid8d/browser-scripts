@@ -12,6 +12,7 @@ This is a tampermonkey script that will improve the experience on the Big Brothe
 * Extended Watch: Watch for 'Still watching' or 'Timeout' messages and click or reload page
 * Hides P+ controls and show video scrubber
 * Auto-switch to Quad cam at startup (optional)
+* Auto unmute and maximize volume (optional)
 
 Any of these features are optional by changing the settings in the script.
 

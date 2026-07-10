@@ -10,6 +10,8 @@
 
 // ==/UserScript==
 /*
+v 1.41 (2026)
+ - Added settings to automatically unmute and maximize the volume
 v 1.4 (2026)
  - no more live feed page, so removed those fixes
  - match live tv streams (live-tv/stream/big_brother/*)
@@ -84,6 +86,10 @@ v 1.2
     const retryMaxAttempts = 10
     // reset the 'retry' attempts in the script, if it is no longer working
     const resetScript = false
+    // if set to true, checks to see if audio is muted, and if so unmutes it automatically
+    const enableMuteCheck = true
+    // if set to true, will monitor changes in the volume and attempt to reset it to max volume
+    const enableSetVolume = true
 
     // DO NOT MODIFY AFTER HERE
 
@@ -140,6 +146,45 @@ v 1.2
 		}
 	}
 
+    //This function simulates n button presses in rapid succession
+    //Used by setVolumeToMax to quickly get the volume back to 100%
+    async function dispatchWithDelay(event, n, delay) {
+        for (let i = 0; i < n; i++) {
+            document.dispatchEvent(event);
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+
+    const volumeUpEvent = new KeyboardEvent('keydown', {
+        key: 'ArrowUp',
+        code: 'ArrowUp',
+        keyCode: 38,
+        which: 38,
+        bubbles: true,
+        cancelable: true,
+    });
+
+    function setVolumeToMax() {
+        dispatchWithDelay(volumeUpEvent, 10, 0);
+    }
+
+    function checkAudio() {
+        if (enableMuteCheck) {
+            const volumeButton = document.querySelector('.btn-volume')
+            if (volumeButton.getAttribute('aria-label') === 'Unmute audio') {
+               volumeButton.click()
+               log('volume enabled')
+            }
+        }
+        if (enableSetVolume) {
+            const volumeSlider = document.querySelector('.volume-slider-li-content-progress-content')
+            if (volumeSlider.getAttribute('style') != 'height: 100% !important;') {
+                log('raising volume to max')
+                setVolumeToMax();
+            }
+        }
+    }
+
     function updateQualities() {
 		const video = document.querySelector('video')
         const player = video.player
@@ -165,6 +210,7 @@ v 1.2
     }
 
     function checkVideo() {
+        checkAudio()
         if (extendedWatch) {
             const countdownButton = document.querySelector('.stream-countdown-button')
             if (countdownButton) {
